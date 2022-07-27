@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Network Template: Sample template that creates a VPC with DNS and public IPs enabled.
+Parameters:
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    
+Resources:
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: KeyPair
+      PublicKeyMaterial: ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAyMMbn26XrKRXyU2UOk/vhxkPxBcvtSel4kgiswJLXelMEg4NSSpeZDaazvBLxPtV77O9FFJwplH8XPFM72VJpvKlreo7ZE1vO4iyrbgyRP494Omd9TeFzAV6bpyOHe1Wc+HVgTtS2RlnOOcDNDMbZ5lOKiK9D9UIqwSIiiLMofe/ub9DEoFJGfNUWpdXMeq+hGBNjIPuM8xh+o6yqDIKynNBLRkEPX/dx9haEdz+EXizlovPRWtsB4Qfy73mcU0Jsgmag0ZYShxSGesEQKBPeMDVaPlvBIo1hI9aTIlu7w47haghl7D0CALDRUiLkb7TWbji6AT5fN7JI5QKuwKpew== KeyPair
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: willy-vpc
+  
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: AWS::Region
+      Tags:
+        - Key: Name
+          Value: willy-subnet
+  
+  WillySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: sg
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: willy-sg
+
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          All:
+            - ConfigureSampleApp
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref AmazonLinuxAMIID
+      KeyName: !Ref KeyPair
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref WillySecurityGroup
+          AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          DeleteOnTermination: true
+          SubnetId:
+            !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: willy-ec2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo echo '' > /home/ec2-user/.ssh/authorized_keys
